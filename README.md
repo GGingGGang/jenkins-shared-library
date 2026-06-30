@@ -27,7 +27,7 @@ pipeline {
   stages {
     stage('Build & Push') {
       steps {
-        kanikoBuild(image: "ghcr.io/${env.GH_ORG}/k8s-test-login-server")
+        kanikoBuild(image: "ghcr.io/${env.GH_ORG}/svc-login")
       }
     }
   }

@@ -7,9 +7,26 @@ def call(Map config = [:]) {
     def dockerfile = config.dockerfile ?: 'Dockerfile'
     def platform   = config.platform   ?: 'linux/arm64'
     def tags       = config.tags       ?: [(env.GIT_COMMIT ?: 'latest').take(7), 'latest']
+    def cacheRepo  = config.cacheRepo  ?: "${image}/cache"
+    def buildArgs  = config.buildArgs  ?: [:]
 
     container('kaniko') {
-        def destinations = tags.collect { "--destination=${image}:${it}" }.join(' ')
-        sh "/kaniko/executor --context=${context} --dockerfile=${dockerfile} --customPlatform=${platform} --cache=true ${destinations}"
+        def destinations = tags.collect { "--destination=${image}:${it}" }
+        def extraArgs    = buildArgs.collect { k, v -> "--build-arg=${k}=${v}" }
+        def cmd = ([
+            '/kaniko/executor',
+            "--context=${context}",
+            "--dockerfile=${dockerfile}",
+            "--customPlatform=${platform}",
+        ] + destinations + extraArgs + [
+            '--cache=true',
+            "--cache-repo=${cacheRepo}",
+            '--cache-ttl=168h',
+            '--snapshot-mode=redo',
+            '--use-new-run',
+            '--ignore-path=/busybox',
+            '--ignore-path=/home/jenkins',
+        ]).join(' ')
+        sh cmd
     }
 }
