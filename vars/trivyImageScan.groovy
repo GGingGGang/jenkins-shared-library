@@ -27,6 +27,9 @@ def call(Map config = [:]) {
             """,
             returnStatus: true
         )
+        if (!fileExists(reportFile)) {
+            error "trivyImageScan: ${reportFile} 없음 — trivy image 스캔 자체가 실패한 것으로 보임(레지스트리 인증/네트워크 등 확인, exit code ${scanStatus})"
+        }
         sh """
             trivy convert \\
               --format template \\
