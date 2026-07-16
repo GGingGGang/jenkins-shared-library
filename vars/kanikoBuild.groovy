@@ -9,6 +9,7 @@ def call(Map config = [:]) {
     def tags       = config.tags       ?: [(env.GIT_COMMIT ?: 'latest').take(7), 'latest']
     def cacheRepo  = config.cacheRepo  ?: "${image}/cache"
     def buildArgs  = config.buildArgs  ?: [:]
+    def digestFile = config.digestFile ?: 'image-digest.txt'
 
     container('kaniko') {
         def destinations = tags.collect { "--destination=${image}:${it}" }
@@ -18,6 +19,7 @@ def call(Map config = [:]) {
             "--context=${context}",
             "--dockerfile=${dockerfile}",
             "--customPlatform=${platform}",
+            "--digest-file=${digestFile}",
         ] + destinations + extraArgs + [
             '--cache=true',
             "--cache-repo=${cacheRepo}",

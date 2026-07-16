@@ -9,6 +9,7 @@ jenkins-shared-library/
 ├── vars/
 │   ├── kanikoBuild.groovy     # Kaniko 빌드 + GHCR push step
 │   ├── trivyImageScan.groovy  # Trivy 취약점 스캔 + HTML 리포트 게시 step
+│   ├── cosignSign.groovy      # cosign 이미지 서명 step (digest 기준)
 │   └── deployBump.groovy      # k8s-gitops manifest 이미지 태그 bump step
 └── resources/
     └── trivy/html.tpl         # trivy 공식 HTML 리포트 템플릿 (체크인 — 버전 고정)
@@ -58,6 +59,12 @@ pipeline {
       }
     }
 
+    stage('Sign') {
+      steps {
+        cosignSign(image: env.IMAGE)
+      }
+    }
+
     stage('Bump') {
       steps {
         deployBump(service: env.SVC, image: env.IMAGE, tag: env.TAG)
@@ -82,6 +89,7 @@ Kaniko 로 빌드하고 GHCR 로 push.
 | `tags` | `[<git-commit 앞 7자리>, latest]` | push 태그 목록 |
 | `cacheRepo` | `${image}/cache` | kaniko layer cache 레포 |
 | `buildArgs` | `[:]` | Dockerfile `ARG` 로 전달할 key-value map |
+| `digestFile` | `image-digest.txt` | kaniko `--digest-file` 출력 경로 — push 된 이미지 digest 기록(`cosignSign` 이 읽음) |
 
 `kaniko` 컨테이너에서 실행 — podTemplate 이 GHCR 인증(`/kaniko/.docker/config.json`)을 projected volume 으로 mount 한다. `--cache=true --snapshot-mode=redo --use-new-run --ignore-path=/busybox --ignore-path=/home/jenkins` 등 안정성 옵션을 내부적으로 항상 적용 (durable-task hang 회피 — 상세는 [oci-always-free-k8s `kubernetes/platform/jenkins/README.md`](https://github.com/GGingGGang/oci-always-free-k8s/blob/main/kubernetes/platform/jenkins/README.md) §4 Kaniko podTemplate).
 
@@ -105,6 +113,23 @@ Kaniko 로 빌드하고 GHCR 로 push.
 - `installPlugins`에 `htmlpublisher` 필요
 - `controller.javaOpts` 로 `hudson.model.DirectoryBrowserSupport.CSP` 완화 필요 — Jenkins 기본 CSP(`default-src 'none'`)는 `publishHTML`이 서빙하는 페이지의 인라인 `<style>`/`<script>`를 막음. `html.tpl`이 외부 CDN 참조가 없는 걸 확인했으므로 `'self' 'unsafe-inline'` 범위로만 완화(전면 비활성화 아님).
 - `agent.podTemplates.kaniko` 의 pod 에 `trivy` 컨테이너(`aquasec/trivy`, `sleep 99d`) 추가 필요
+
+## cosignSign
+
+push 된 이미지를 digest 기준으로 cosign 서명. 서명 아티팩트는 같은 레지스트리(GHCR)에 저장.
+
+| 파라미터 | 기본값 | 설명 |
+|----------|--------|------|
+| `image` | (필수) | 서명 대상 레지스트리 경로 (태그 아닌 digest 로 서명) |
+| `digestFile` | `image-digest.txt` | `kanikoBuild` 가 기록한 digest 파일 경로 |
+| `keyPath` | `/cosign/key/cosign.key` | 마운트된 cosign 개인키 경로 |
+| `tlogUpload` | `false` | 공개 투명성 로그(Rekor) 업로드 — 자체호스팅이라 기본 off |
+
+동작: `kanikoBuild` 가 기록한 digest 파일을 읽어 `cosign` 컨테이너에서 `cosign sign --key <keyPath> <image>@<digest>` 실행. 비밀번호는 podTemplate 의 `COSIGN_PASSWORD` env(Secret `cosign-key` key `password`)로 주입 — 스텝은 비번을 직접 다루지 않는다. 태그가 아닌 불변 digest 로 서명해 이후 태그가 재지정돼도 서명이 정확한 이미지를 가리킨다. `tlogUpload=false` 로 서명하면 검증(Kyverno verifyImages)도 tlog 무시로 맞춰야 한다.
+
+**Jenkins 쪽 전제 조건** ([oci-always-free-k8s `kubernetes/platform/jenkins/values.yaml`](https://github.com/GGingGGang/oci-always-free-k8s/blob/main/kubernetes/platform/jenkins/values.yaml)):
+- `agent.podTemplates.kaniko` pod 에 `cosign` 컨테이너(shell 포함 이미지 — distroless cosign 은 `sleep`/`sh` 가 없어 사이드카로 못 씀) 추가
+- `cosign-key` Secret(`build` NS, key `cosign.key`+`password`) 마운트 + `COSIGN_PASSWORD` env 주입
 
 ## deployBump
 
