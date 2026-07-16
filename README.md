@@ -95,6 +95,7 @@ Kaniko 로 빌드하고 GHCR 로 push.
 | `tag` | `<git-commit 앞 7자리>` | 스캔 대상 태그 |
 | `severity` | `CRITICAL` | 게이트 기준 심각도 |
 | `ignoreUnfixed` | `true` | fix 미제공 CVE는 게이트·리포트에서 제외(`--ignore-unfixed`) |
+| `gate` | `true` | `false`면 취약점 발견 시 빌드 실패 대신 `UNSTABLE` 표시 — 스캔·리포트는 그대로 남고 배포는 계속 |
 | `reportFile` | `trivy-report.json` | 원본 스캔 결과(아티팩트) |
 | `htmlFile` | `trivy-report.html` | 사람이 보는 리포트(아티팩트 + HTML Publisher) |
 

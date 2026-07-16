@@ -6,6 +6,7 @@ def call(Map config = [:]) {
     def tag           = config.tag           ?: (env.GIT_COMMIT ?: 'latest').take(7)
     def severity      = config.severity       ?: 'CRITICAL'
     def ignoreUnfixed = config.ignoreUnfixed != null ? config.ignoreUnfixed : true
+    def gate          = config.gate          != null ? config.gate          : true
     def reportFile    = config.reportFile    ?: 'trivy-report.json'
     def htmlFile      = config.htmlFile      ?: 'trivy-report.html'
     def templateFile  = 'trivy-html.tpl'
@@ -51,6 +52,11 @@ def call(Map config = [:]) {
     ])
 
     if (status != 0) {
-        error "trivyImageScan: ${severity} 취약점 발견 (fix 가능) — 'Trivy Scan' 리포트 참고"
+        def msg = "trivyImageScan: ${severity} 취약점 발견 (fix 가능) — 'Trivy Scan' 리포트 참고"
+        if (gate) {
+            error msg
+        } else {
+            unstable msg
+        }
     }
 }
