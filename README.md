@@ -12,7 +12,8 @@ jenkins-shared-library/
 │   ├── cosignSign.groovy      # cosign 이미지 서명 step (digest 기준)
 │   └── deployBump.groovy      # k8s-gitops manifest 이미지 태그 bump step
 └── resources/
-    └── trivy/html.tpl         # trivy 공식 HTML 리포트 템플릿 (체크인 — 버전 고정)
+    ├── trivy/html.tpl         # trivy 공식 HTML 리포트 템플릿 (체크인 — 버전 고정)
+    └── cosign/signing-config.json # cosign v3 signing config — tlog/TSA 항목 없음 (체크인)
 ```
 
 ## 사용
@@ -123,9 +124,9 @@ push 된 이미지를 digest 기준으로 cosign 서명. 서명 아티팩트는 
 | `image` | (필수) | 서명 대상 레지스트리 경로 (태그 아닌 digest 로 서명) |
 | `digestFile` | `image-digest.txt` | `kanikoBuild` 가 기록한 digest 파일 경로 |
 | `keyPath` | `/cosign/key/cosign.key` | 마운트된 cosign 개인키 경로 |
-| `tlogUpload` | `false` | 공개 투명성 로그(Rekor) 업로드 — 자체호스팅이라 기본 off |
+| `signingConfig` | `cosign-signing-config.json` | 워크스페이스에 쓸 signing config 파일명 — 내용은 체크인된 `resources/cosign/signing-config.json` |
 
-동작: `kanikoBuild` 가 기록한 digest 파일을 읽어 `cosign` 컨테이너에서 `cosign sign --key <keyPath> <image>@<digest>` 실행. 비밀번호는 podTemplate 의 `COSIGN_PASSWORD` env(Secret `cosign-key` key `password`)로 주입 — 스텝은 비번을 직접 다루지 않는다. 태그가 아닌 불변 digest 로 서명해 이후 태그가 재지정돼도 서명이 정확한 이미지를 가리킨다. `tlogUpload=false` 로 서명하면 검증(Kyverno verifyImages)도 tlog 무시로 맞춰야 한다.
+동작: `kanikoBuild` 가 기록한 digest 파일을 읽어 `cosign` 컨테이너에서 `cosign sign --yes --signing-config <파일> --key <keyPath> <image>@<digest>` 실행. 비밀번호는 podTemplate 의 `COSIGN_PASSWORD` env(Secret `cosign-key` key `password`)로 주입 — 스텝은 비번을 직접 다루지 않는다. 태그가 아닌 불변 digest 로 서명해 이후 태그가 재지정돼도 서명이 정확한 이미지를 가리킨다. cosign v3 부터 `--tlog-upload` deprecated — tlog/TSA 미사용은 해당 서비스 항목이 없는 signing config(체크인된 `resources/cosign/signing-config.json`)로 지정한다. 서명 시 공개 인프라(Rekor·TSA) 호출 없음 — 검증(Kyverno verifyImages)도 tlog 무시로 맞춰야 한다.
 
 **Jenkins 쪽 전제 조건** ([oci-always-free-k8s `kubernetes/platform/jenkins/values.yaml`](https://github.com/GGingGGang/oci-always-free-k8s/blob/main/kubernetes/platform/jenkins/values.yaml)):
 - `agent.podTemplates.kaniko` pod 에 `cosign` 컨테이너(shell 포함 이미지 — distroless cosign 은 `sleep`/`sh` 가 없어 사이드카로 못 씀) 추가
