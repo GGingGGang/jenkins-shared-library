@@ -83,7 +83,7 @@ Kaniko 로 빌드하고 GHCR 로 push.
 | `cacheRepo` | `${image}/cache` | kaniko layer cache 레포 |
 | `buildArgs` | `[:]` | Dockerfile `ARG` 로 전달할 key-value map |
 
-`kaniko` 컨테이너에서 실행 — podTemplate 이 GHCR 인증(`/kaniko/.docker/config.json`)을 projected volume 으로 mount 한다. `--cache=true --snapshot-mode=redo --use-new-run --ignore-path=/busybox --ignore-path=/home/jenkins` 등 안정성 옵션을 내부적으로 항상 적용 (durable-task hang 회피 — 상세는 `oci-terraform/kubernetes/platform/jenkins/README.md` §4 Kaniko podTemplate).
+`kaniko` 컨테이너에서 실행 — podTemplate 이 GHCR 인증(`/kaniko/.docker/config.json`)을 projected volume 으로 mount 한다. `--cache=true --snapshot-mode=redo --use-new-run --ignore-path=/busybox --ignore-path=/home/jenkins` 등 안정성 옵션을 내부적으로 항상 적용 (durable-task hang 회피 — 상세는 [oci-always-free-k8s `kubernetes/platform/jenkins/README.md`](https://github.com/GGingGGang/oci-always-free-k8s/blob/main/kubernetes/platform/jenkins/README.md) §4 Kaniko podTemplate).
 
 ## trivyImageScan
 
@@ -94,20 +94,20 @@ Kaniko 로 빌드하고 GHCR 로 push.
 | `image` | (필수) | 스캔 대상 레지스트리 경로 |
 | `tag` | `<git-commit 앞 7자리>` | 스캔 대상 태그 |
 | `severity` | `CRITICAL` | 게이트 기준 심각도 |
-| `ignoreUnfixed` | `true` | fix 미제공 CVE는 게이트 제외(경고만, `--ignore-unfixed`) |
+| `ignoreUnfixed` | `true` | fix 미제공 CVE는 게이트·리포트에서 제외(`--ignore-unfixed`) |
 | `reportFile` | `trivy-report.json` | 원본 스캔 결과(아티팩트) |
 | `htmlFile` | `trivy-report.html` | 사람이 보는 리포트(아티팩트 + HTML Publisher) |
 
 동작: `trivy` 컨테이너에서 `--format json`으로 1회만 스캔(`returnStatus: true`로 exit code 캡처 — 취약점 있어도 스텝이 바로 fail 하지 않음) → `trivy convert` 로 같은 json을 `resources/trivy/html.tpl`(공식 템플릿, 체크인) 기준 HTML 로 변환(재스캔 없음) → json/html 둘 다 `archiveArtifacts` → `publishHTML` 로 빌드 페이지에 **"Trivy Scan"** 탭 게시 → 마지막에 캡처해둔 exit code 로 실패 판정(`error`). 순서를 이렇게 잡은 이유: 스캔 실패 시에도 원인 확인용 HTML 리포트가 항상 먼저 게시되고, 그 다음에 파이프라인이 멈춰야 리포트를 못 보는 사고가 안 생김.
 
-**Jenkins 쪽 전제 조건** (`oci-terraform/kubernetes/platform/jenkins/values.yaml`):
+**Jenkins 쪽 전제 조건** ([oci-always-free-k8s `kubernetes/platform/jenkins/values.yaml`](https://github.com/GGingGGang/oci-always-free-k8s/blob/main/kubernetes/platform/jenkins/values.yaml)):
 - `installPlugins`에 `htmlpublisher` 필요
 - `controller.javaOpts` 로 `hudson.model.DirectoryBrowserSupport.CSP` 완화 필요 — Jenkins 기본 CSP(`default-src 'none'`)는 `publishHTML`이 서빙하는 페이지의 인라인 `<style>`/`<script>`를 막음. `html.tpl`이 외부 CDN 참조가 없는 걸 확인했으므로 `'self' 'unsafe-inline'` 범위로만 완화(전면 비활성화 아님).
 - `agent.podTemplates.kaniko` 의 pod 에 `trivy` 컨테이너(`aquasec/trivy`, `sleep 99d`) 추가 필요
 
 ## deployBump
 
-`k8s-gitops` 레포의 `manifests/<service>/kustomization.yaml` 이미지 태그를 불변 SHA 로 bump 하고 push.
+[k8s-gitops](https://github.com/GGingGGang/k8s-gitops) 레포의 `manifests/<service>/kustomization.yaml` 이미지 태그를 불변 SHA 로 bump 하고 push.
 
 | 파라미터 | 기본값 | 설명 |
 |----------|--------|------|
