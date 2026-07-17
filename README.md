@@ -124,7 +124,7 @@ push 된 이미지를 digest 기준으로 cosign 서명. 서명 아티팩트는 
 | `digestFile` | `image-digest.txt` | `kanikoBuild` 가 기록한 digest 파일 경로 |
 | `keyPath` | `/cosign/key/cosign.key` | 마운트된 cosign 개인키 경로 |
 
-동작: `kanikoBuild` 가 기록한 digest 파일을 읽어 `cosign` 컨테이너에서 `cosign sign --yes --key <keyPath> <image>@<digest>` 실행. 비밀번호는 podTemplate 의 `COSIGN_PASSWORD` env(Secret `cosign-key` key `password`)로 주입 — 스텝은 비번을 직접 다루지 않는다. 태그가 아닌 불변 digest 로 서명해 이후 태그가 재지정돼도 서명이 정확한 이미지를 가리킨다. 서명은 v3 기본 signing config(공개 sigstore)를 그대로 사용해 **Rekor tlog 항목이 bundle 에 포함**된다 — tlog 없는 bundle 은 `cosign verify`(기본값)와 Kyverno SigstoreBundle 검증이 모두 거부하기 때문(실측). 외부(Rekor) 호출은 서명 시점 1회뿐이고, 검증은 bundle 에 내장된 포함증명으로 오프라인 수행된다.
+동작: `kanikoBuild` 가 기록한 digest 파일을 읽어 `cosign` 컨테이너에서 `cosign sign --yes --tlog-upload=false --key <keyPath> <image>@<digest>` 실행. 비밀번호는 podTemplate 의 `COSIGN_PASSWORD` env(Secret `cosign-key` key `password`)로 주입 — 스텝은 비번을 직접 다루지 않는다. 태그가 아닌 불변 digest 로 서명해 이후 태그가 재지정돼도 서명이 정확한 이미지를 가리킨다. 서명은 **cosign v2 레거시 포맷**(`sha256-<digest>.sig` 태그)으로 같은 레포에 저장되며 tlog 미사용(자체완결) — 검증측 Kyverno 기본(Cosign) 경로의 `rekor.ignoreTlog: true` 와 세트다. v3 bundle 포맷을 쓰지 않는 이유: Kyverno 가 bundle 의 raw key 검증을 아직 지원하지 않음 (kyverno#16267, 실측 확인 2026-07-17).
 
 **Jenkins 쪽 전제 조건** ([oci-always-free-k8s `kubernetes/platform/jenkins/values.yaml`](https://github.com/GGingGGang/oci-always-free-k8s/blob/main/kubernetes/platform/jenkins/values.yaml)):
 - `agent.podTemplates.kaniko` pod 에 `cosign` 컨테이너(shell 포함 이미지 — distroless cosign 은 `sleep`/`sh` 가 없어 사이드카로 못 씀) 추가

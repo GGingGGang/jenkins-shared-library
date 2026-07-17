@@ -14,9 +14,9 @@ def call(Map config = [:]) {
         error "cosignSign: ${digestFile} 비어있음 — kaniko push 가 성공했는지 확인"
     }
 
-    // v3 기본 signing config(공개 sigstore) 사용 — Rekor tlog 포함 서명.
-    // tlog 없는 bundle 은 cosign verify·kyverno 모두 기본 거부 — 검증은 bundle 내 포함증명으로 오프라인.
+    // cosign v2 · 레거시 서명 포맷(.sig 태그) — kyverno 기본(Cosign) 검증 경로와 페어.
+    // v3 bundle 포맷은 kyverno 가 raw key 검증 미지원(kyverno#16267). tlog 미사용은 검증측 rekor.ignoreTlog 와 세트.
     container('cosign') {
-        sh "cosign sign --yes --key ${keyPath} ${image}@${digest}"
+        sh "cosign sign --yes --tlog-upload=false --key ${keyPath} ${image}@${digest}"
     }
 }
