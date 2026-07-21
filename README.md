@@ -121,4 +121,6 @@ push 된 이미지를 digest 기준으로 cosign 서명. 서명 아티팩트는 
 
 동작: `jnlp` 컨테이너에서 `github-token` credential(JCasC `credentials-config`)로 `k8s-gitops` 를 shallow clone → `manifests/<service>/kustomization.yaml` 의 `newName`/`newTag` 를 `sed` 로 치환 → 변경 있으면 커밋(`ci: bump <service> to <tag>`) 후 `main` 에 직접 push, 변경 없으면 스킵(멱등).
 
+여러 서비스가 동시에 `main` 에 push 할 때 non-fast-forward 로 거부되는 경우 최대 5회 재시도: `git fetch --depth 1` + `git reset --hard origin/main` 으로 최신을 받은 뒤 `sed` 를 재적용해 재커밋·재push (서비스별로 다른 파일을 건드리므로 내용 충돌 없음 — 순수 push 순서 경합만 해소).
+
 앱 레포 main 브랜치는 건드리지 않음 — bump 커밋은 전부 `k8s-gitops` 에 쌓인다. `k8s-gitops` 는 Jenkins organizationFolder 의 `svc-.*` 스캔 대상 밖이라 빌드 루프가 없다(`[ci skip]` 불필요).
