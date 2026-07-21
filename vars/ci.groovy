@@ -18,7 +18,7 @@ def call(Map cfg = [:]) {
         }
 
         environment {
-            SVC   = service
+            SVC   = "${service}"
             IMAGE = "ghcr.io/${env.GH_ORG.toLowerCase()}/svc-${service}"
             TAG   = "${env.GIT_COMMIT}"
         }
