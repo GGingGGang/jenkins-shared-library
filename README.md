@@ -32,17 +32,20 @@ ci(service: 'auth')
 ```yaml
 defaults:
   scanGate: true   # true = 취약점 발견 시 빌드 실패, false = UNSTABLE 로 통과
-  sign: false
+  sign: true
 
 services:
   auth:
-    scanGate: false
-    sign: true
-  core: {}          # defaults 그대로
-  batch: {}
+    language: node
+  core:
+    language: go
+  batch:
+    language: java
 ```
 
-**목록에 없는 서비스는 자동으로 `defaults`(게이트 on, 서명 off)로 동작** — 예외 없는 평범한 신규 서비스는 이 파일을 전혀 건드릴 필요가 없다(온보딩 = 앱 레포 + k8s-gitops + 인프라 레포의 네임스페이스, 3곳). `services.yaml` 수정은 특정 서비스에 기본 정책과 다른 예외를 승인할 때만 발생하는 별도 이벤트고, 그 결정은 이 레포(앱 레포가 아님) 소유로 남는다.
+`language` 는 서비스 스택 메타데이터 — 파이프라인 분기에는 아직 안 쓰고(`ci.groovy` 미참조) 사람/후속 자동화용 기록.
+
+**목록에 없는 서비스는 자동으로 `defaults`(게이트 on, 서명 on)로 동작** — 예외 없는 평범한 신규 서비스는 이 파일을 전혀 건드릴 필요가 없다(온보딩 = 앱 레포 + k8s-gitops + 인프라 레포의 네임스페이스, 3곳). `services.yaml` 수정은 특정 서비스에 기본 정책과 다른 예외를 승인할 때만 발생하는 별도 이벤트고, 그 결정은 이 레포(앱 레포가 아님) 소유로 남는다.
 
 | 파라미터 | 기본값 | 설명 |
 |----------|--------|------|

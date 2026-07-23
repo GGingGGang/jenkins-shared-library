@@ -1,13 +1,13 @@
 # CI 파이프라인 사실의 단일 소스. 서비스 추가·변경은 이 파일만 고치면 됨 — vars/ci.groovy 는 무수정.
 defaults:
-  scanGate: false
+  scanGate: true
   sign: true
 
 services:
   auth: 
     language: node
   core:
-    language: node 
+    language: go
   batch:
     language: java
   
