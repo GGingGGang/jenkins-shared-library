@@ -17,6 +17,7 @@ def call(Map cfg = [:]) {
         agent {
             kubernetes {
                 inheritFrom 'kaniko'
+                namespace 'build'
                 defaultContainer 'kaniko'
                 yamlMergeStrategy merge()
                 yaml """

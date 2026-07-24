@@ -64,7 +64,7 @@ services:
 
 **Jenkins 쪽 전제 조건**: `installPlugins`에 `pipeline-utility-steps` 필요 (`readYaml` 스텝 — `services.yaml` 파싱용).
 
-`agent.kubernetes.inheritFrom 'kaniko'` 는 Jenkins JCasC 의 `agent.podTemplates.kaniko`(jnlp·kaniko·trivy·cosign)를 상속하고, 그 위에 `languages.<lang>.testImage` 로 만든 `test` 컨테이너 하나를 `yamlMergeStrategy merge()` 로 병합한다 — JCasC 베이스 템플릿은 무수정, 파드는 빌드당 1개(모든 컨테이너 동시 기동, 스테이지가 `container()` 로 전환). `env.GH_ORG` 는 JCasC `env-config` 가 주입. GHCR 이미지 경로는 대문자 GitHub 계정명 대응을 위해 `.toLowerCase()` 필수 — git clone URL 등 다른 용도는 원본 케이싱 유지 가능.
+`agent.kubernetes.inheritFrom 'kaniko'` 는 Jenkins JCasC 의 `agent.podTemplates.kaniko`(jnlp·kaniko·trivy·cosign)를 상속하고, 그 위에 `languages.<lang>.testImage` 로 만든 `test` 컨테이너 하나를 `yamlMergeStrategy merge()` 로 병합한다 — JCasC 베이스 템플릿은 무수정, 파드는 빌드당 1개(모든 컨테이너 동시 기동, 스테이지가 `container()` 로 전환). 단 **`namespace` 는 상속되지 않는다**(실측 2026-07-24: 파드가 cloud 기본 NS `cicd` 로 가서 `kaniko-builder` SA 조회 403) — `namespace 'build'` 를 에이전트 블록에 명시해야 한다. `env.GH_ORG` 는 JCasC `env-config` 가 주입. GHCR 이미지 경로는 대문자 GitHub 계정명 대응을 위해 `.toLowerCase()` 필수 — git clone URL 등 다른 용도는 원본 케이싱 유지 가능.
 
 아래 4개 step은 `ci()` 가 내부적으로 호출하는 빌딩 블록 — 직접 쓸 일은 거의 없지만 파라미터는 `ci()` 동작을 이해하는 데 필요.
 
