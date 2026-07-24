@@ -1,13 +1,30 @@
 # CI 파이프라인 사실의 단일 소스. 서비스 추가·변경은 이 파일만 고치면 됨 — vars/ci.groovy 는 무수정.
+#
+# Test 게이트 계약 (v1) — "언어가 같으면 같은 게이트":
+# - 게이트는 languages.<lang> 정의 하나로 결정된다. 서비스별 override 없음.
+# - testCmd 는 Docker 없이 exit code 로 판정 가능해야 한다 (kaniko 에이전트 파드에 Docker 데몬 없음).
+#   testcontainers 급 통합 테스트는 각 레포가 언어 관용으로 분리해 Docker 있는 환경(GitHub Actions)에서 실행:
+#   go = //go:build integration 태그 / node = *.integration.test.ts 접미사 / java = @Tag("integration")
+# - testImage 는 docker.io 풀네임 + arm64 지원 태그만 (A1.Flex 노드). lint 게이트는 계약 v2 로 추후.
 defaults:
   scanGate: true
   sign: true
 
+languages:
+  go:
+    testImage: docker.io/library/golang:1.26
+    testCmd: go test ./...
+  node:
+    testImage: docker.io/library/node:22
+    testCmd: npm ci && npm test
+  java:
+    testImage: docker.io/library/gradle:8.14-jdk21
+    testCmd: gradle --no-daemon test
+
 services:
-  auth: 
+  auth:
     language: node
   core:
     language: go
   batch:
     language: java
-  

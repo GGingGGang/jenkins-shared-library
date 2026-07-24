@@ -27,12 +27,23 @@ jenkins-shared-library/
 ci(service: 'auth')
 ```
 
-`ci()` 가 `pipeline{}` 전체(agent·stages)를 조립한다 — Build & Push → Image Scan → Sign(서비스별 on/off) → Bump. `ci()` 는 `service` 외에 다른 파라미터를 받지 않는다 — 스캔 게이트·서명 여부 같은 보안 정책은 앱 레포 `Jenkinsfile` 이 넘길 수 없고, 오직 `resources/ci/services.yaml`(본 레포 소유 — 앱 레포는 쓰기 권한 없음)로만 정해진다:
+`ci()` 가 `pipeline{}` 전체(agent·stages)를 조립한다 — **Test → Build & Push → Image Scan → Sign(서비스별 on/off) → Bump**. Test 가 맨 앞이라 테스트 실패 시 이미지 자체가 만들어지지 않는다(이후 스테이지 전부 스킵). `ci()` 는 `service` 외에 다른 파라미터를 받지 않는다 — 스캔 게이트·서명 여부·테스트 커맨드 같은 정책은 앱 레포 `Jenkinsfile` 이 넘길 수 없고, 오직 `resources/ci/services.yaml`(본 레포 소유 — 앱 레포는 쓰기 권한 없음)로만 정해진다:
 
 ```yaml
 defaults:
   scanGate: true   # true = 취약점 발견 시 빌드 실패, false = UNSTABLE 로 통과
   sign: true
+
+languages:         # Test 게이트 정의 — 언어가 같으면 같은 게이트
+  go:
+    testImage: docker.io/library/golang:1.26
+    testCmd: go test ./...
+  node:
+    testImage: docker.io/library/node:22
+    testCmd: npm ci && npm test
+  java:
+    testImage: docker.io/library/gradle:8.14-jdk21
+    testCmd: gradle --no-daemon test
 
 services:
   auth:
@@ -43,9 +54,9 @@ services:
     language: java
 ```
 
-`language` 는 서비스 스택 메타데이터 — 파이프라인 분기에는 아직 안 쓰고(`ci.groovy` 미참조) 사람/후속 자동화용 기록.
+`language` 는 Test 게이트의 조회 키다. 게이트는 `languages.<lang>` 정의 하나로 결정되고 **서비스별 override 가 없다** — 언어가 같으면 같은 게이트를 통과해야 한다. `testCmd` 에는 "Docker 없이 동작해야 한다"는 계약이 붙는다(kaniko 에이전트 파드에 Docker 데몬 없음): testcontainers 급 통합 테스트는 각 앱 레포가 언어 관용(go `//go:build integration` / node `*.integration.test.ts` / java `@Tag("integration")`)으로 표준 커맨드에서 분리하고, Docker 가 있는 환경(각 레포 GitHub Actions)에서 따로 돌린다. lint 는 게이트 계약 v2 로 추후 `languages` 에 추가한다.
 
-**목록에 없는 서비스는 자동으로 `defaults`(게이트 on, 서명 on)로 동작** — 예외 없는 평범한 신규 서비스는 이 파일을 전혀 건드릴 필요가 없다(온보딩 = 앱 레포 + k8s-gitops + 인프라 레포의 네임스페이스, 3곳). `services.yaml` 수정은 특정 서비스에 기본 정책과 다른 예외를 승인할 때만 발생하는 별도 이벤트고, 그 결정은 이 레포(앱 레포가 아님) 소유로 남는다.
+`scanGate`/`sign` 은 목록에 없어도 `defaults` 로 동작하지만 **`language` 는 필수** — 없으면 `ci()` 가 파이프라인 조립 전에 즉시 실패한다. 신규 서비스 온보딩 = `services:` 에 `language` 한 줄 선언, 그 순간 해당 언어의 게이트가 자동 적용된다. 기본 정책과 다른 예외 승인·언어 게이트 정의 변경은 전부 이 레포(앱 레포가 아님) 소유로 남는다.
 
 | 파라미터 | 기본값 | 설명 |
 |----------|--------|------|
@@ -53,7 +64,7 @@ services:
 
 **Jenkins 쪽 전제 조건**: `installPlugins`에 `pipeline-utility-steps` 필요 (`readYaml` 스텝 — `services.yaml` 파싱용).
 
-`agent.kubernetes.label 'kaniko'` 는 Jenkins JCasC 의 `agent.podTemplates.kaniko` (컨테이너명 `kaniko`)를 가리킨다. `env.GH_ORG` 는 JCasC `env-config` 가 주입. GHCR 이미지 경로는 대문자 GitHub 계정명 대응을 위해 `.toLowerCase()` 필수 — git clone URL 등 다른 용도는 원본 케이싱 유지 가능.
+`agent.kubernetes.inheritFrom 'kaniko'` 는 Jenkins JCasC 의 `agent.podTemplates.kaniko`(jnlp·kaniko·trivy·cosign)를 상속하고, 그 위에 `languages.<lang>.testImage` 로 만든 `test` 컨테이너 하나를 `yamlMergeStrategy merge()` 로 병합한다 — JCasC 베이스 템플릿은 무수정, 파드는 빌드당 1개(모든 컨테이너 동시 기동, 스테이지가 `container()` 로 전환). `env.GH_ORG` 는 JCasC `env-config` 가 주입. GHCR 이미지 경로는 대문자 GitHub 계정명 대응을 위해 `.toLowerCase()` 필수 — git clone URL 등 다른 용도는 원본 케이싱 유지 가능.
 
 아래 4개 step은 `ci()` 가 내부적으로 호출하는 빌딩 블록 — 직접 쓸 일은 거의 없지만 파라미터는 `ci()` 동작을 이해하는 데 필요.
 

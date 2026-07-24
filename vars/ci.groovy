@@ -8,12 +8,33 @@ def call(Map cfg = [:]) {
     def defaults = parsed.defaults ?: [:]
     def svc      = (parsed.services ?: [:])[service] ?: [:]
     def conf     = defaults + svc
+    def lang     = (parsed.languages ?: [:])[conf.language]
+    if (!lang?.testImage || !lang?.testCmd) {
+        error "ci: '${service}' 의 language('${conf.language}') 가 services.yaml languages 에 정의돼 있지 않음 (testImage/testCmd 필수)"
+    }
 
     pipeline {
         agent {
             kubernetes {
-                label 'kaniko'
+                inheritFrom 'kaniko'
                 defaultContainer 'kaniko'
+                yamlMergeStrategy merge()
+                yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: test
+      image: ${lang.testImage}
+      command: ["sleep"]
+      args: ["99d"]
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          memory: 1536Mi
+"""
             }
         }
 
@@ -29,6 +50,14 @@ def call(Map cfg = [:]) {
         }
 
         stages {
+            stage('Test') {
+                steps {
+                    container('test') {
+                        sh lang.testCmd
+                    }
+                }
+            }
+
             stage('Build & Push') {
                 steps {
                     kanikoBuild(
