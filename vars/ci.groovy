@@ -64,7 +64,7 @@ spec:
                     kanikoBuild(
                         image: env.IMAGE,
                         context: "dir://${env.WORKSPACE}",
-                        tags: [env.TAG, 'latest'],
+                        tags: [env.TAG],
                         buildArgs: [GIT_SHA: env.GIT_COMMIT]
                     )
                 }

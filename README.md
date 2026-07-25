@@ -78,7 +78,7 @@ Kaniko 로 빌드하고 GHCR 로 push.
 | `context` | `.` | 빌드 컨텍스트 (`dir://...` 형식 가능) |
 | `dockerfile` | `Dockerfile` | Dockerfile 경로 |
 | `platform` | `linux/arm64` | 타겟 아키텍처 (Ampere A1) |
-| `tags` | `[<git-commit 앞 7자리>, latest]` | push 태그 목록 |
+| `tags` | `[<git-commit 앞 7자리>]` | push 태그 목록 — mutable 태그(latest 등) 금지, 불변 SHA 만 |
 | `cacheRepo` | `${image}/cache` | kaniko layer cache 레포 |
 | `buildArgs` | `[:]` | Dockerfile `ARG` 로 전달할 key-value map |
 | `digestFile` | `image-digest.txt` | kaniko `--digest-file` 출력 경로 — push 된 이미지 digest 기록(`cosignSign` 이 읽음) |

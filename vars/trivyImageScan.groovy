@@ -3,7 +3,7 @@ def call(Map config = [:]) {
     if (!image) {
         error 'trivyImageScan: image 필수 (예: ghcr.io/org/repo)'
     }
-    def tag           = config.tag           ?: (env.GIT_COMMIT ?: 'latest').take(7)
+    def tag           = config.tag           ?: (env.GIT_COMMIT ?: 'dev').take(7)
     def severity      = config.severity       ?: 'CRITICAL'
     def ignoreUnfixed = config.ignoreUnfixed != null ? config.ignoreUnfixed : true
     def gate          = config.gate          != null ? config.gate          : true
