@@ -36,13 +36,13 @@ defaults:
 
 languages:         # Test 게이트 정의 — 언어가 같으면 같은 게이트
   go:
-    testImage: docker.io/library/golang:1.26
+    testImage: docker.io/library/golang:1.25
     testCmd: go test ./...
   node:
     testImage: docker.io/library/node:22
     testCmd: npm ci && npm test
   java:
-    testImage: docker.io/library/gradle:8.14-jdk21
+    testImage: docker.io/library/gradle:8.12-jdk21
     testCmd: gradle --no-daemon test
 
 services:
