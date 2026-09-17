@@ -22,6 +22,9 @@ languages:
   java:
     testImage: docker.io/library/gradle:8.12-jdk21
     testCmd: gradle --no-daemon test
+  python:
+    testImage: docker.io/library/python:3.13-slim
+    testCmd: python -m unittest discover -s tests -v
 
 services:
   auth:
@@ -30,3 +33,5 @@ services:
     language: go
   batch:
     language: java
+  notify:
+    language: python
