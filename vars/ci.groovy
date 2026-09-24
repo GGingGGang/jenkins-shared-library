@@ -1,3 +1,7 @@
+import com.cloudbees.groovy.cps.NonCPS
+import groovy.json.JsonOutput
+import java.time.Instant
+
 def call(Map cfg = [:]) {
     def service = cfg.service
     if (!service) {
@@ -93,5 +97,45 @@ spec:
                 }
             }
         }
+
+        post {
+            failure {
+                script {
+                    try {
+                        sendFailureAlert(service, env.JOB_NAME, env.BUILD_NUMBER, env.BUILD_URL ?: '')
+                    } catch (Exception e) {
+                        echo "Alertmanager notification failed: ${e.message}"
+                    }
+                }
+            }
+        }
+    }
+}
+
+@NonCPS
+def sendFailureAlert(String service, String job, String build, String buildUrl) {
+    def alert = [[
+        labels: [alertname: 'JenkinsBuildFailed', severity: 'warning', namespace: 'cicd', service: service, job: job, build: build],
+        annotations: [summary: "${job} #${build} failed", description: buildUrl],
+        endsAt: Instant.now().plusSeconds(600).toString()
+    ]]
+    def connection = (HttpURLConnection) new URL('http://kps-kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093/api/v2/alerts').openConnection()
+    try {
+        connection.setRequestMethod('POST')
+        connection.setConnectTimeout(3000)
+        connection.setReadTimeout(3000)
+        connection.setDoOutput(true)
+        connection.setRequestProperty('Content-Type', 'application/json')
+        def output = connection.getOutputStream()
+        try {
+            output.write(JsonOutput.toJson(alert).getBytes('UTF-8'))
+        } finally {
+            output.close()
+        }
+        if (connection.getResponseCode() != 200) {
+            throw new IOException("Alertmanager returned HTTP ${connection.getResponseCode()}")
+        }
+    } finally {
+        connection.disconnect()
     }
 }

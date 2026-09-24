@@ -44,6 +44,9 @@ languages:         # Test 게이트 정의 — 언어가 같으면 같은 게이
   java:
     testImage: docker.io/library/gradle:8.12-jdk21
     testCmd: gradle --no-daemon test
+  python:
+    testImage: docker.io/library/python:3.13-slim
+    testCmd: python -m unittest discover -s tests -v
 
 services:
   auth:
@@ -52,17 +55,34 @@ services:
     language: go
   batch:
     language: java
+  notify:
+    language: python
+  web:
+    language: node
 ```
 
 `language` 는 Test 게이트의 조회 키다. 게이트는 `languages.<lang>` 정의 하나로 결정되고 **서비스별 override 가 없다** — 언어가 같으면 같은 게이트를 통과해야 한다. `testCmd` 에는 "Docker 없이 동작해야 한다"는 계약이 붙는다(kaniko 에이전트 파드에 Docker 데몬 없음): testcontainers 급 통합 테스트는 각 앱 레포가 언어 관용(go `//go:build integration` / node `*.integration.test.ts` / java `@Tag("integration")`)으로 표준 커맨드에서 분리하고, Docker 가 있는 환경(각 레포 GitHub Actions)에서 따로 돌린다. lint 는 게이트 계약 v2 로 추후 `languages` 에 추가한다.
 
 `scanGate`/`sign` 은 목록에 없어도 `defaults` 로 동작하지만 **`language` 는 필수** — 없으면 `ci()` 가 파이프라인 조립 전에 즉시 실패한다. 신규 서비스 온보딩 = `services:` 에 `language` 한 줄 선언, 그 순간 해당 언어의 게이트가 자동 적용된다. 기본 정책과 다른 예외 승인·언어 게이트 정의 변경은 전부 이 레포(앱 레포가 아님) 소유로 남는다.
 
+`app-templates/javascript-app`은 JavaScript이지만 Node.js로 테스트하므로 기존 `language: node`를 사용한다. `python-app`은 `language: python`을 사용하며 표준 라이브러리만으로 `unittest`를 실행한다. Python 의존성이 추가되면 이미지의 설치 단계뿐 아니라 이 공통 Test 게이트의 의존성 설치도 함께 정의해야 한다. Docker가 필요한 Python 통합 테스트는 기본 `tests/` 검색 범위 밖으로 분리한다.
+
+새 서비스 생성 시 `services:`에 직접 등록한다. 예를 들어 `web: {language: node}`, `notify: {language: python}`이다. 템플릿 추가만으로 서비스가 등록되거나 배포되지는 않는다.
+
 | 파라미터 | 기본값 | 설명 |
 |----------|--------|------|
 | `service` | (필수) | `services.yaml` 조회 키이자 `IMAGE`/`Bump` 대상 서비스명 |
 
 **Jenkins 쪽 전제 조건**: `installPlugins`에 `pipeline-utility-steps` 필요 (`readYaml` 스텝 — `services.yaml` 파싱용).
+
+`ci()`의 빌드가 `FAILURE`로 끝나면 공통 `post`에서 Alertmanager 내부 Service로 `JenkinsBuildFailed` 알림을 보낸다. 알림에는 서비스·작업·빌드 번호와 빌드 URL이 들어가며 10분 뒤 만료된다. `UNSTABLE`과 `ABORTED`는 대상이 아니다. 전송 실패는 빌드 로그에 남기고 원래 실패 결과를 유지한다. 공유 라이브러리 변경은 다음 빌드부터 적용되며 Jenkins 플러그인 추가나 컨트롤러 재시작이 필요 없다.
+
+실패 빌드로 확인할 때는 Alertmanager를 포트 포워드한 뒤 알림을 조회한다:
+
+```bash
+kubectl -n monitoring port-forward svc/kps-kube-prometheus-stack-alertmanager 9093:9093
+curl -sS 'http://localhost:9093/api/v2/alerts?filter=alertname%3DJenkinsBuildFailed'
+```
 
 `agent.kubernetes.inheritFrom 'kaniko'` 는 Jenkins JCasC 의 `agent.podTemplates.kaniko`(jnlp·kaniko·trivy·cosign)를 상속하고, 그 위에 `languages.<lang>.testImage` 로 만든 `test` 컨테이너 하나를 `yamlMergeStrategy merge()` 로 병합한다 — JCasC 베이스 템플릿은 무수정, 파드는 빌드당 1개(모든 컨테이너 동시 기동, 스테이지가 `container()` 로 전환). 단 **`namespace` 는 상속되지 않는다**(실측 2026-07-24: 파드가 cloud 기본 NS `cicd` 로 가서 `kaniko-builder` SA 조회 403) — `namespace 'build'` 를 에이전트 블록에 명시해야 한다. `env.GH_ORG` 는 JCasC `env-config` 가 주입. GHCR 이미지 경로는 대문자 GitHub 계정명 대응을 위해 `.toLowerCase()` 필수 — git clone URL 등 다른 용도는 원본 케이싱 유지 가능.
 
