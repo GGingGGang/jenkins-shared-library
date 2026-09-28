@@ -11,7 +11,7 @@ jenkins-shared-library/
 │   ├── kanikoBuild.groovy     # Kaniko 빌드 + GHCR push step
 │   ├── trivyImageScan.groovy  # Trivy 취약점 스캔 + HTML 리포트 게시 step
 │   ├── cosignSign.groovy      # cosign 이미지 서명 step (digest 기준)
-│   └── deployBump.groovy      # k8s-gitops manifest 이미지 태그 bump step
+│   └── deployBump.groovy      # GitOps 이미지 태그 직접 갱신 step
 └── resources/
     ├── trivy/html.tpl         # trivy 공식 HTML 리포트 템플릿 (체크인 — 버전 고정)
     └── ci/services.yaml       # 서비스별 파이프라인 설정 — CI 사실의 단일 소스
@@ -71,7 +71,7 @@ services:
 
 | 파라미터 | 기본값 | 설명 |
 |----------|--------|------|
-| `service` | (필수) | `services.yaml` 조회 키이자 `IMAGE`/`Bump` 대상 서비스명 |
+| `service` | (필수) | `services.yaml` 조회 키이자 GitOps 매니페스트 대상 서비스명 |
 
 **Jenkins 쪽 전제 조건**: `installPlugins`에 `pipeline-utility-steps` 필요 (`readYaml` 스텝 — `services.yaml` 파싱용).
 
@@ -144,7 +144,7 @@ push 된 이미지를 digest 기준으로 cosign 서명. 서명 아티팩트는 
 
 ## deployBump
 
-[k8s-gitops](https://github.com/GGingGGang/k8s-gitops) 레포의 `manifests/<service>/kustomization.yaml` 이미지 태그를 불변 SHA 로 bump 하고 push.
+[k8s-gitops](https://github.com/GGingGGang/k8s-gitops) 레포의 `manifests/<service>/kustomization.yaml` 이미지 태그를 불변 SHA 로 bump 하고 `main`에 직접 push한다.
 
 | 파라미터 | 기본값 | 설명 |
 |----------|--------|------|
@@ -153,8 +153,12 @@ push 된 이미지를 digest 기준으로 cosign 서명. 서명 아티팩트는 
 | `tag` | (필수) | `images[].newTag` 에 쓸 값 (불변 SHA 권장) |
 | `gitops` | `k8s-gitops` | GitOps 레포 이름 (`https://github.com/${GH_ORG}/${gitops}.git`) |
 
-동작: `jnlp` 컨테이너에서 `github-token` credential(JCasC `credentials-config`)로 `k8s-gitops` 를 shallow clone → `manifests/<service>/kustomization.yaml` 의 `newName`/`newTag` 를 `sed` 로 치환 → 변경 있으면 커밋(`ci: bump <service> to <tag>`) 후 `main` 에 직접 push, 변경 없으면 스킵(멱등).
+`ci()`의 Bump 단계는 앞선 단계가 완료되면 빌드의 `GIT_COMMIT`을 이미지 태그로 전달한다. 현재 공유 라이브러리에는 브랜치 제한이나 원격 앱 `main` SHA와의 비교 조건이 없다.
 
-여러 서비스가 동시에 `main` 에 push 할 때 non-fast-forward 로 거부되는 경우 최대 5회 재시도: `git fetch --depth 1` + `git reset --hard origin/main` 으로 최신을 받은 뒤 `sed` 를 재적용해 재커밋·재push (서비스별로 다른 파일을 건드리므로 내용 충돌 없음 — 순수 push 순서 경합만 해소).
+동작: `jnlp` 컨테이너에서 `github-token` credential로 GitOps 저장소를 shallow clone하고 `manifests/<service>/kustomization.yaml`의 `newName`과 `newTag`를 변경한다. 변경이 있으면 커밋(`ci: bump <service> to <tag>`) 후 GitOps `main`에 직접 push하고, 변경이 없으면 스킵한다.
 
-앱 레포 main 브랜치는 건드리지 않음 — bump 커밋은 전부 `k8s-gitops` 에 쌓인다. `k8s-gitops` 는 Jenkins organizationFolder 의 `svc-.*` 스캔 대상 밖이라 빌드 루프가 없다(`[ci skip]` 불필요).
+push는 최초 시도를 포함해 최대 5회 수행한다. 거부되면 `git fetch --depth 1 origin main`과 `git reset --hard origin/main`으로 임시 clone을 갱신하고 이미지 태그를 다시 적용해 재시도한다. 강제 push는 사용하지 않는다.
+
+GitOps `main`에 push되면 Argo CD가 자동 동기화한다. Jenkins 성공은 GitOps push까지를 뜻하며 실제 배포 완료는 Application의 Sync와 Health 상태를 확인해야 한다.
+
+앱 레포 main 브랜치는 건드리지 않고 GitOps `main`만 갱신한다. `k8s-gitops` 는 Jenkins organizationFolder 의 `svc-.*` 스캔 대상 밖이라 빌드 루프가 없다(`[ci skip]` 불필요).
