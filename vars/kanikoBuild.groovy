@@ -18,7 +18,7 @@ def call(Map config = [:]) {
             '/kaniko/executor',
             "--context=${context}",
             "--dockerfile=${dockerfile}",
-            "--customPlatform=${platform}",
+            "--custom-platform=${platform}",
             "--digest-file=${digestFile}",
         ] + destinations + extraArgs + [
             '--cache=true',
