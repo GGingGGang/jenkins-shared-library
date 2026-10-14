@@ -18,6 +18,13 @@ def call(Map config = [:]) {
         def unfixedFlag = ignoreUnfixed ? '--ignore-unfixed' : ''
         def scanStatus = sh(
             script: """
+                if [ -n "\${TRIVY_CACHE_ROOT:-}" ]; then
+                  : "\${JOB_NAME:?JOB_NAME is required for persistent Trivy cache}"
+                  cache_key=\$(printf '%s' "\$JOB_NAME" | sha256sum | cut -d ' ' -f 1)
+                  [ "\${#cache_key}" -eq 64 ]
+                  export TRIVY_CACHE_DIR="\${TRIVY_CACHE_ROOT}/\${cache_key}"
+                  (umask 077; mkdir -p "\$TRIVY_CACHE_DIR")
+                fi
                 trivy image \\
                   --severity ${severity} \\
                   --exit-code 1 \\
